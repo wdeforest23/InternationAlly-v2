@@ -3,89 +3,126 @@ import json
 import requests
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
+import logging
 
 # Load environment variables
 load_dotenv()
 
 # Get API key from environment
-GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
+GOOGLE_MAPS_API_KEY = os.getenv("GOOGLE_API_KEY")
 
-def search_places(params_str: str) -> List[Dict[str, Any]]:
-    """
-    Search for places using the Google Maps API
-    
-    Args:
-        params_str: JSON string with search parameters
-            - location: The city or neighborhood
-            - place_type: Type of place (restaurant, grocery, etc.)
-            - radius: Search radius in meters (default 1000)
-    
-    Returns:
-        List of place data dictionaries
-    """
-    # Parse the parameters
-    try:
-        params = json.loads(params_str)
-    except json.JSONDecodeError:
-        # If the string is not valid JSON, try to extract parameters manually
-        params = extract_params_manually(params_str)
-    
-    # Get location coordinates
-    location_coords = get_location_coordinates(params.get("location", "Chicago"))
-    
-    # Set up the API request
-    url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json"
-    
-    # Build query parameters
-    query_params = {
-        "location": f"{location_coords['lat']},{location_coords['lng']}",
-        "radius": params.get("radius", 1000),
-        "type": params.get("place_type", "restaurant"),
-        "key": GOOGLE_MAPS_API_KEY
-    }
-    
-    # Make the API request
-    try:
-        response = requests.get(url, params=query_params)
-        response.raise_for_status()  # Raise an exception for HTTP errors
-        
-        # Parse the response
-        data = response.json()
-        
-        # Extract and format place data
-        places = []
-        for place in data.get("results", [])[:10]:  # Limit to 10 places
-            # Extract coordinates for mapping
-            location = {
-                "lat": place.get("geometry", {}).get("location", {}).get("lat", location_coords["lat"]),
-                "lng": place.get("geometry", {}).get("location", {}).get("lng", location_coords["lng"])
+class GoogleMapsAPI:
+    def __init__(self):
+        self.api_key = os.getenv("GOOGLE_API_KEY")
+        self.base_url = "https://maps.googleapis.com/maps/api"
+
+    def search_places(
+        self,
+        query: str,
+        location: str,
+        radius: int = 1000,
+        keywords: Optional[List[str]] = None,
+        open_now: bool = False
+    ) -> List[Dict[str, Any]]:
+        """Search for places using Google Maps API"""
+        try:
+            logging.info(f"Starting Google Maps search with query: {query}")
+            logging.debug(f"API Key present: {bool(self.api_key)}")
+            
+            # Get coordinates for the location
+            coords = self._get_location_coordinates(location)
+            logging.debug(f"Coordinates for {location}: {coords}")
+            if not coords:
+                return []
+            
+            # Build search parameters
+            search_params = {
+                "key": self.api_key,
+                "location": f"{coords['lat']},{coords['lng']}",
+                "radius": radius,
+                "keyword": query
             }
             
-            # Create place object
-            place_data = {
-                "id": place.get("place_id", ""),
+            if keywords:
+                search_params["keyword"] = " ".join([query] + keywords)
+            
+            if open_now:
+                search_params["opennow"] = "true"
+            
+            logging.debug(f"Making Google Maps API request with params: {search_params}")
+            
+            response = requests.get(self.base_url + "/place/nearbysearch/json", params=search_params)
+            print(f"Google Maps API response status: {response.status_code}")  # Debug print
+            
+            if response.status_code != 200:
+                print(f"Error response: {response.text}")
+                return []
+                
+            data = response.json()
+            if "error_message" in data:
+                print(f"API Error: {data['error_message']}")
+                return []
+                
+            results = data.get("results", [])
+            return self._format_places(results)
+            
+        except Exception as e:
+            print(f"Error searching places: {str(e)}")
+            return []
+
+    def _get_location_coordinates(self, location: str) -> Dict[str, float]:
+        """Get coordinates for a location"""
+        try:
+            params = {
+                "address": location,
+                "key": self.api_key
+            }
+            
+            response = requests.get(
+                f"{self.base_url}/geocode/json",
+                params=params
+            )
+            response.raise_for_status()
+            
+            result = response.json()
+            if result["results"]:
+                location = result["results"][0]["geometry"]["location"]
+                return location
+            
+            # Default to UChicago coordinates
+            return {"lat": 41.7886, "lng": -87.5987}
+            
+        except Exception as e:
+            print(f"Error getting coordinates: {str(e)}")
+            return {"lat": 41.7886, "lng": -87.5987}
+
+    def _format_places(self, places: List[Dict]) -> List[Dict]:
+        """Format place results with additional information"""
+        formatted_places = []
+        
+        for place in places[:5]:  # Limit to top 5 places
+            formatted_place = {
                 "name": place.get("name", ""),
                 "address": place.get("vicinity", ""),
                 "rating": place.get("rating", 0),
-                "user_ratings_total": place.get("user_ratings_total", 0),
-                "price_level": place.get("price_level", 0),
+                "user_ratings": place.get("user_ratings_total", 0),
                 "types": place.get("types", []),
-                "open_now": place.get("opening_hours", {}).get("open_now", False),
-                "photos": place.get("photos", []),
-                "location": location
+                "location": place.get("geometry", {}).get("location", {}),
+                "place_id": place.get("place_id", ""),
+                "google_maps_link": f"https://www.google.com/maps/place/?q=place_id:{place.get('place_id', '')}"
             }
             
-            places.append(place_data)
-        
-        return places
-    
-    except requests.RequestException as e:
-        # If we're in development or testing mode, return mock data
-        if os.getenv("FLASK_ENV") == "development" or not GOOGLE_MAPS_API_KEY:
-            return get_mock_places(params)
-        
-        # Otherwise, raise the exception
-        raise Exception(f"Error fetching place data: {str(e)}")
+            # Add photo reference if available
+            if place.get("photos"):
+                photo_ref = place["photos"][0]["photo_reference"]
+                formatted_place["photo_url"] = (
+                    f"{self.base_url}/place/photo"
+                    f"?maxwidth=400&photo_reference={photo_ref}&key={self.api_key}"
+                )
+            
+            formatted_places.append(formatted_place)
+            
+        return formatted_places
 
 def get_location_coordinates(location: str) -> Dict[str, float]:
     """

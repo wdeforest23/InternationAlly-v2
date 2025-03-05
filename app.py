@@ -1,87 +1,49 @@
 import os
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, session
-from flask_login import LoginManager, current_user, login_user, logout_user, login_required
+from flask import Flask, request, jsonify
 from dotenv import load_dotenv
-from app import create_app
-from app.models.user import User
+from app.utils.chat_manager import ChatManager
+import logging
 
-# Initialize Flask app
-app = create_app()
+# Load environment variables
+load_dotenv()
 
-# Initialize login manager
-login_manager = LoginManager()
-login_manager.init_app(app)
-login_manager.login_view = 'login'
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,  # Changed to DEBUG for testing
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
-@login_manager.user_loader
-def load_user(user_id):
-    return User.get(int(user_id))
+# Create Flask app
+app = Flask(__name__)
 
-# Routes
-@app.route('/')
-def index():
-    return render_template('index.html', title='Home')
+# Initialize chat manager
+chat_manager = ChatManager()
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if current_user.is_authenticated:
-        return redirect(url_for('index'))
-    
-    if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
+@app.route('/test', methods=['POST'])
+async def test_apis():
+    try:
+        message = request.json.get('message', '')
+        logging.info(f"Testing APIs with message: {message}")
         
-        # Simple authentication - in a real app, you'd verify credentials
-        user = next((u for u in User.users.values() if u.email == email), None)
-        if user:
-            login_user(user)
-            session['user_id'] = user.id  # Store user ID in session
-            next_page = request.args.get('next')
-            return redirect(next_page or url_for('index'))
-        else:
-            flash('Invalid email or password')
-    
-    return render_template('login.html', title='Login')
-
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if current_user.is_authenticated:
-        return redirect(url_for('index'))
-    
-    if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
-        name = request.form.get('name')
+        if not message:
+            return jsonify({'error': 'No message provided'}), 400
         
-        if any(u.email == email for u in User.users.values()):
-            flash('Email already registered')
-            return render_template('register.html', title='Register')
+        # Process message and get response
+        response = await chat_manager.process_message(message)
         
-        # Create new user with a simple ID
-        user_id = len(User.users) + 1
-        user = User(user_id, email, name)
-        User.users[user_id] = user
+        return jsonify({
+            'success': True,
+            'response': response.get('response'),
+            'api_data': {
+                'housing_results': len(response['api_data']['housing']) if response['api_data']['housing'] else 0,
+                'places_results': len(response['api_data']['places']) if response['api_data']['places'] else 0
+            },
+            'analysis': response.get('analysis')
+        })
         
-        flash('Registration successful! Please log in.')
-        return redirect(url_for('login'))
-    
-    return render_template('register.html', title='Register')
-
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    session.pop('user_id', None)  # Remove user ID from session
-    return redirect(url_for('index'))
-
-@app.route('/chat')
-@login_required
-def chat():
-    return render_template('chat.html', title='Chat')
-
-@app.route('/about')
-def about():
-    return render_template('about.html', title='About')
+    except Exception as e:
+        logging.error(f"Error in test endpoint: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, port=5000)

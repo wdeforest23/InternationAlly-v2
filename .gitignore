@@ -50,8 +50,22 @@ Thumbs.db
 # API keys and secrets
 *.pem
 *.key
+credentials/
+**/credentials/
+*.json
+!package.json
+!package-lock.json
 
 # Testing
 .coverage
 htmlcov/
 .pytest_cache/
+
+# Data files
+data/docs_store.pkl
+data/faiss_index
+data/chroma_db/
+data/documents/
+
+# Instance specific
+instance/
