@@ -11,7 +11,7 @@ import google.generativeai as genai
 from openai import OpenAI
 
 class RAGSystem:
-    def __init__(self, index_path: str = "faiss_index", docs_path: str = "docs_store.pkl"):
+    def __init__(self, index_path: str = "data/faiss_index", docs_path: str = "data/docs_store.pkl"):
         # Initialize API clients
         self.openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
         genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))

@@ -67,7 +67,7 @@ class ChatManager:
 
 Example 1 Input: "Find me a furnished studio near campus under $1500"
 {
-    "intents": ["housing_search", "general_information"],
+    "intents": ["housing_search"],
     "parameters": {
         "housing": {
             "location": "Hyde Park, Chicago",
@@ -77,13 +77,14 @@ Example 1 Input: "Find me a furnished studio near campus under $1500"
             "amenities": ["furnished"],
             "radius_miles": 1
         },
-        "location": {}
+        "location": {},
+        "student_info": {}
     }
 }
 
 Example 2 Input: "What Asian restaurants are open now within 10 minutes walk of UChicago?"
 {
-    "intents": ["location_info", "general_information"],
+    "intents": ["location_info"],
     "parameters": {
         "housing": {},
         "location": {
@@ -92,6 +93,35 @@ Example 2 Input: "What Asian restaurants are open now within 10 minutes walk of 
             "radius_meters": 800,
             "keywords": ["Asian", "restaurant"],
             "open_now": true
+        },
+        "student_info": {}
+    }
+}
+
+Example 3 Input: "How many hours can I work on campus with an F-1 visa?"
+{
+    "intents": ["student_info"],
+    "parameters": {
+        "housing": {},
+        "location": {},
+        "student_info": {
+            "topic": "employment",
+            "subtopic": "on_campus_work",
+            "visa_type": "F-1"
+        }
+    }
+}
+
+Example 4 Input: "What documents do I need for OPT application?"
+{
+    "intents": ["student_info"],
+    "parameters": {
+        "housing": {},
+        "location": {},
+        "student_info": {
+            "topic": "employment",
+            "subtopic": "opt",
+            "document_type": "application_requirements"
         }
     }
 }
@@ -181,15 +211,22 @@ IMPORTANT: Your response must ONLY contain the JSON object, nothing else. No exp
             
             # Initialize context and data collectors
             context_parts = []
-            api_data = {"housing": None, "places": None}
+            api_data = {"housing": None, "places": None, "rag": None}
             
-            # Get RAG context
-            try:
-                rag_docs = self.rag.query(message, n_results=3)
-                rag_context = self.rag.generate_response(message, rag_docs)
-                context_parts.append(f"Background Information:\n{rag_context}")
-            except Exception as e:
-                logging.error(f"Error getting RAG context: {str(e)}")
+            # Get RAG context only for student_info queries
+            if "student_info" in analysis["intents"]:
+                try:
+                    student_params = analysis["parameters"].get("student_info", {})
+                    # Enhance the query with specific parameters for better RAG results
+                    enhanced_query = f"{message} {student_params.get('topic', '')} {student_params.get('subtopic', '')}"
+                    
+                    rag_docs = self.rag.query(enhanced_query, n_results=3)
+                    rag_context = self.rag.generate_response(enhanced_query, rag_docs)
+                    context_parts.append(f"Official Information:\n{rag_context}")
+                    api_data["rag"] = rag_docs
+                    logging.info("RAG context retrieved successfully")
+                except Exception as e:
+                    logging.error(f"Error getting RAG context: {str(e)}")
             
             # Get housing information if relevant
             if "housing_search" in analysis["intents"]:
@@ -241,10 +278,10 @@ IMPORTANT: Your response must ONLY contain the JSON object, nothing else. No exp
                 except Exception as e:
                     logging.error(f"Error getting location information: {str(e)}", exc_info=True)
             
-            # Generate response using GPT-4
+            # Generate final response using GPT-4
             system_message = """You are InternationAlly, an AI assistant helping international students at the University of Chicago.
-            Use the following real-time information to provide a helpful, natural response. When mentioning properties or places,
-            reference the specific details provided but maintain a conversational tone.
+            Use the following information to provide a helpful, natural response that combines background knowledge with real-time data.
+            When mentioning properties or places, reference specific details but maintain a conversational tone.
             
             {context}
             
@@ -252,7 +289,7 @@ IMPORTANT: Your response must ONLY contain the JSON object, nothing else. No exp
             Always mention if you're showing a subset of available options and suggest refining the search if needed."""
             
             completion = self.openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model="gpt-4",
                 messages=[
                     {"role": "system", "content": system_message.format(context="\n\n".join(context_parts))},
                     {"role": "user", "content": message}

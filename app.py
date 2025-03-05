@@ -9,41 +9,53 @@ load_dotenv()
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,  # Changed to DEBUG for testing
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    filename='logs/app.log',
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
 # Create Flask app
 app = Flask(__name__)
+app.secret_key = os.getenv('FLASK_SECRET_KEY', 'dev')
 
 # Initialize chat manager
 chat_manager = ChatManager()
 
-@app.route('/test', methods=['POST'])
-async def test_apis():
+@app.route('/chat', methods=['POST'])
+async def chat():
     try:
-        message = request.json.get('message', '')
-        logging.info(f"Testing APIs with message: {message}")
-        
-        if not message:
+        data = request.get_json()
+        if not data or 'message' not in data:
             return jsonify({'error': 'No message provided'}), 400
-        
-        # Process message and get response
+
+        message = data['message']
+        logging.info(f"Received message: {message}")
+
+        # Process the message
         response = await chat_manager.process_message(message)
         
-        return jsonify({
-            'success': True,
-            'response': response.get('response'),
-            'api_data': {
-                'housing_results': len(response['api_data']['housing']) if response['api_data']['housing'] else 0,
-                'places_results': len(response['api_data']['places']) if response['api_data']['places'] else 0
-            },
-            'analysis': response.get('analysis')
-        })
-        
+        # Log the type of response we got
+        if response['success']:
+            logging.info("Message processed successfully")
+            if response['api_data']['rag']:
+                logging.info("RAG system was used in response")
+            if response['api_data']['housing']:
+                logging.info("Housing data was included")
+            if response['api_data']['places']:
+                logging.info("Places data was included")
+        else:
+            logging.error(f"Error processing message: {response.get('error')}")
+
+        return jsonify(response)
+
     except Exception as e:
-        logging.error(f"Error in test endpoint: {str(e)}", exc_info=True)
+        logging.error(f"Error in chat endpoint: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
+@app.route('/health', methods=['GET'])
+def health_check():
+    """Simple health check endpoint"""
+    return jsonify({'status': 'healthy'})
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True)
