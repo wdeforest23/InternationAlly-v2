@@ -1,31 +1,18 @@
 from flask import Flask
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from flask_migrate import Migrate
 from datetime import timedelta
-from .models.db import init_db, db
+import logging
 import os
 
-# Initialize extensions here so they can be imported by other parts of the app
-from flask_login import LoginManager
-login_manager = LoginManager()
+# Initialize extensions
+from .models.db import db, init_db
 
-def create_app():
-    # Get the absolute path to the app directory
-    app_dir = os.path.dirname(os.path.abspath(__file__))
-    
+def create_app(config=None):
     app = Flask(__name__)
     
-    # Set template and static folders using absolute paths
-    app.template_folder = os.path.join(app_dir, 'templates')
-    app.static_folder = os.path.join(app_dir, 'static')
-    
-    CORS(app)  # Enable CORS for all routes
-    
-    # Initialize login manager
-    login_manager.init_app(app)
-    login_manager.login_view = 'login'
-    
-    # Configure database and secrets
+    # Configure app
     app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///app.db')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
@@ -33,11 +20,27 @@ def create_app():
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=1)
     
     # Initialize extensions
-    init_db(app)
+    db.init_app(app)
+    migrate = Migrate(app, db)
     jwt = JWTManager(app)
-
-    # Register blueprints
-    from .routes import main_bp
-    app.register_blueprint(main_bp)
-
+    
+    # Setup CORS
+    CORS(app, resources={
+        r"/*": {
+            "origins": ["http://localhost:5173"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": True
+        }
+    })
+    
+    with app.app_context():
+        # Import models
+        from .models.user import User
+        from .models.conversation import Conversation, Message
+        
+        # Register blueprints
+        from .routes import main_bp
+        app.register_blueprint(main_bp)
+        
     return app

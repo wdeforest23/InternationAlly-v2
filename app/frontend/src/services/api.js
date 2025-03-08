@@ -1,12 +1,12 @@
 class ApiService {
-  static BASE_URL = 'http://localhost:5000';
-
   static async login(email, password) {
-    const response = await fetch(`${this.BASE_URL}/api/login`, {
+    const response = await fetch('/api/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
+      credentials: 'include',
       body: JSON.stringify({ email, password }),
     });
     
@@ -15,13 +15,12 @@ class ApiService {
       throw new Error(data.error || 'Login failed');
     }
     
-    // Store the token
     localStorage.setItem('token', data.token);
     return data;
   }
 
   static async signup(userData) {
-    const response = await fetch(`${this.BASE_URL}/api/signup`, {
+    const response = await fetch('/api/signup', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -46,7 +45,7 @@ class ApiService {
     }
     
     try {
-      const response = await fetch(`${this.BASE_URL}/api/profile`, {
+      const response = await fetch('/api/profile', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -76,7 +75,7 @@ class ApiService {
     }
     
     try {
-      const response = await fetch(`${this.BASE_URL}/api/profile`, {
+      const response = await fetch('/api/profile', {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -102,20 +101,37 @@ class ApiService {
   }
 
   static async sendChatMessage(message) {
-    const response = await fetch(`${this.BASE_URL}/api/chat`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
-      },
-      body: JSON.stringify({ message }),
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to send message');
+    const token = localStorage.getItem('token');
+    if (!token) {
+      throw new Error('No authentication token found');
     }
-    
-    return response.json();
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ message })
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem('token');
+          throw new Error('Session expired. Please login again.');
+        }
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to send message');
+      }
+
+      const data = await response.json();
+      console.log('API response:', data); // Debug log
+      return data;
+    } catch (error) {
+      console.error('Chat API error:', error);
+      throw error;
+    }
   }
 }
 

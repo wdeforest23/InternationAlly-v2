@@ -1,36 +1,45 @@
 import { useState } from 'react';
 import ApiService from '../services/api';
+import { useUI } from '../context/UIContext';
 
 function ChatPage() {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const { showError } = useUI();
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!inputMessage.trim()) return;
 
-    const newMessage = {
+    const userMessage = {
       id: Date.now(),
       content: inputMessage,
       sender: 'user'
     };
 
-    setMessages(prev => [...prev, newMessage]);
+    setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsLoading(true);
 
     try {
       const response = await ApiService.sendChatMessage(inputMessage);
-      setMessages(prev => [...prev, {
-        id: Date.now(),
-        content: response.response || response.message,
-        sender: 'assistant'
-      }]);
+      console.log('Chat response:', response); // Debug log
+      
+      if (response.success) {
+        setMessages(prev => [...prev, {
+          id: Date.now() + 1,
+          content: response.response || response.message,
+          sender: 'assistant'
+        }]);
+      } else {
+        throw new Error(response.error || 'Failed to get response');
+      }
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Chat error:', error);
+      showError('Failed to send message: ' + error.message);
       setMessages(prev => [...prev, {
-        id: Date.now(),
+        id: Date.now() + 1,
         content: 'Sorry, there was an error processing your message.',
         sender: 'assistant'
       }]);
@@ -40,16 +49,17 @@ function ChatPage() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="h-[calc(100vh-64px)] flex bg-gray-100"> {/* Adjusted height for navbar */}
       {/* Sidebar */}
-      <div className="w-64 bg-gray-800 text-white p-4 hidden md:block">
-        <div className="mb-4">
-          <button className="w-full bg-teal-500 hover:bg-teal-600 text-white rounded-md p-2 flex items-center justify-center">
-            <span className="mr-2">+</span> New Chat
-          </button>
-        </div>
+      <div className="w-80 bg-gray-800 text-white p-4 hidden md:block">
+        <button 
+          className="w-full bg-teal-500 hover:bg-teal-600 text-white rounded-md p-2 flex items-center justify-center mb-4"
+          onClick={() => {/* handle new chat */}}
+        >
+          <span className="mr-2">+</span> New Chat
+        </button>
+        
         <div className="space-y-2">
-          {/* Chat history would go here */}
           <div className="p-2 hover:bg-gray-700 rounded cursor-pointer">
             Previous Chat 1
           </div>
@@ -62,7 +72,7 @@ function ChatPage() {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 max-w-4xl mx-auto w-full">
           {messages.map((message) => (
             <div
               key={message.id}
@@ -91,23 +101,25 @@ function ChatPage() {
         </div>
 
         {/* Input Area */}
-        <div className="border-t border-gray-200 p-4">
-          <form onSubmit={handleSendMessage} className="flex space-x-4">
-            <input
-              type="text"
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              placeholder="Type your message here..."
-              className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
-            />
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="bg-teal-500 text-white px-6 py-2 rounded-lg hover:bg-teal-600 disabled:opacity-50"
-            >
-              Send
-            </button>
-          </form>
+        <div className="border-t border-gray-200 p-4 bg-white">
+          <div className="max-w-4xl mx-auto">
+            <form onSubmit={handleSendMessage} className="flex space-x-4">
+              <input
+                type="text"
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                placeholder="Type your message here..."
+                className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="bg-teal-500 text-white px-6 py-2 rounded-lg hover:bg-teal-600 disabled:opacity-50"
+              >
+                Send
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>

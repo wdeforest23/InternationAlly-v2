@@ -17,13 +17,9 @@ function App() {
       <AuthProvider>
         <Router>
           <div className="min-h-screen bg-gray-50">
+            <Navbar />
             <Routes>
-              <Route path="/" element={
-                <>
-                  <Navbar />
-                  <LandingPage />
-                </>
-              } />
+              <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/onboarding" element={<OnboardingPage />} />
