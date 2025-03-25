@@ -1,6 +1,6 @@
 # InternationAlly
 
-InternationAlly is an AI-powered trusted international student advisor, helping students feel comfortable and confident in their new foreign environment.
+[InternationAlly](https://github.com/Property-Pilot/Property-Pilot) is an AI-powered trusted international student advisor, helping students feel comfortable and confident in their new foreign environment.
 
 ## Overview
 
