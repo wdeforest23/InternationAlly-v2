@@ -1,6 +1,6 @@
-# InternationAlly
+# InternationAlly-V2
 
-[InternationAlly](https://github.com/Property-Pilot/Property-Pilot) is an AI-powered trusted international student advisor, helping students feel comfortable and confident in their new foreign environment.
+[InternationAlly](https://github.com/Property-Pilot/Property-Pilot) is an AI-powered trusted international student advisor, helping students feel comfortable and confident in their new foreign environment. This project aims to re-factor and update the original InternationAlly application to optimize its agentic reasoning and user experience. 
 
 ## Overview
 
